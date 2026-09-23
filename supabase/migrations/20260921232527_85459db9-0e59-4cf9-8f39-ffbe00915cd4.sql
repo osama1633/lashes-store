@@ -1,0 +1,1 @@
+UPDATE public.payment_methods SET name_ar = 'تابي — قسّمها على ٤ دفعات', sort_order = 6, is_active = true WHERE code = 'tabby';

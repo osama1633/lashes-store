@@ -1,0 +1,16 @@
+CREATE TABLE public.storefront_published (id boolean PRIMARY KEY DEFAULT true CHECK (id = true), content jsonb NOT NULL DEFAULT '{}'::jsonb, updated_at timestamptz NOT NULL DEFAULT now());
+GRANT SELECT ON public.storefront_published TO anon, authenticated;
+GRANT ALL ON public.storefront_published TO service_role;
+ALTER TABLE public.storefront_published ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Visitors read published layout" ON public.storefront_published FOR SELECT TO anon, authenticated USING (true);
+CREATE TABLE public.storefront_drafts (id boolean PRIMARY KEY DEFAULT true CHECK (id = true), content jsonb NOT NULL DEFAULT '{}'::jsonb, updated_at timestamptz NOT NULL DEFAULT now());
+GRANT SELECT ON public.storefront_drafts TO authenticated;
+GRANT ALL ON public.storefront_drafts TO service_role;
+ALTER TABLE public.storefront_drafts ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Admins read draft" ON public.storefront_drafts FOR SELECT TO authenticated USING (public.has_role(auth.uid(), 'admin'::public.app_role));
+CREATE OR REPLACE FUNCTION public.set_storefront_draft(next_draft jsonb) RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$ BEGIN IF NOT public.has_role(auth.uid(), 'admin'::public.app_role) THEN RAISE EXCEPTION 'Not authorized'; END IF; IF jsonb_typeof(next_draft) <> 'object' OR pg_column_size(next_draft) > 100000 THEN RAISE EXCEPTION 'Invalid draft'; END IF; INSERT INTO public.storefront_drafts(id,content,updated_at) VALUES (true,next_draft,now()) ON CONFLICT(id) DO UPDATE SET content = excluded.content, updated_at = now(); END $$;
+REVOKE ALL ON FUNCTION public.set_storefront_draft(jsonb) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.set_storefront_draft(jsonb) TO authenticated;
+CREATE OR REPLACE FUNCTION public.publish_storefront_draft() RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$ BEGIN IF NOT public.has_role(auth.uid(), 'admin'::public.app_role) THEN RAISE EXCEPTION 'Not authorized'; END IF; INSERT INTO public.storefront_published(id,content,updated_at) SELECT true,content,now() FROM public.storefront_drafts WHERE id = true ON CONFLICT(id) DO UPDATE SET content = excluded.content, updated_at = now(); END $$;
+REVOKE ALL ON FUNCTION public.publish_storefront_draft() FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.publish_storefront_draft() TO authenticated;

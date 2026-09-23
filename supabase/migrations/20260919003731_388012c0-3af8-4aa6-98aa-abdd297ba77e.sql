@@ -1,0 +1,1 @@
+ALTER FUNCTION public.place_store_order(text,text,text,text,jsonb,uuid,text,text,text,jsonb) SECURITY INVOKER;
